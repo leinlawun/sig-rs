@@ -2,6 +2,7 @@
 name = "sig-rs"
 version = "1.0.0"
 authors = ["Sergey Sherkunov <leinlawun@leinlawun.org>"]
+description = "This library implements signals and slots in Rust. See the examples."
 documentation = "httsp://github.com/leinlawun/sig-rs"
 homepage = "httsp://github.com/leinlawun/sig-rs"
 repository = "httsp://github.com/leinlawun/sig-rs"
