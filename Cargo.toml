@@ -1,0 +1,15 @@
+[package]
+name = "sig-rs"
+version = "1.0.0"
+authors = ["Sergey Sherkunov <leinlawun@leinlawun.org>"]
+documentation = "httsp://github.com/leinlawun/sig-rs"
+homepage = "httsp://github.com/leinlawun/sig-rs"
+repository = "httsp://github.com/leinlawun/sig-rs"
+readme = "README.md"
+license = "MIT/Apache-2.0"
+
+[lib]
+name = "sig"
+crate-type = ["dylib"]
+
+[dependencies]
