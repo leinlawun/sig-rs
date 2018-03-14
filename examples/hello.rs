@@ -65,7 +65,7 @@ fn main() {
         hello_person: vec![],
         value: 0,
     };
-    let mut hello2 = Hello {
+    let hello2 = Hello {
         hello: vec![],
         hello_person: vec![],
         value: 0,
