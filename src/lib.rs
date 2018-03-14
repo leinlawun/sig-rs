@@ -34,39 +34,35 @@ fn sig_mod(
     item: &Mod,
 ) -> Mod
 {
-    let visited = [visited, &[&item]].concat();
-    let visited = visited.as_slice();
-    let mut injects = [injects, &mut [vec![]]].concat();
-    let injects = injects.as_mut();
+    let new_visited = [visited, &[&item]].concat();
+    let visited_ref = new_visited.as_slice();
+    let mut new_injects = [injects, &mut [vec![]]].concat();
+    let injects_ref = new_injects.as_mut();
     let module = Mod {
         inner: item.inner,
         items: item.items
             .iter()
-            .map(|item| sig_item(cx, visited, injects, &item))
+            .map(|item| sig_item(cx, visited_ref, injects_ref, item))
             .collect(),
     };
 
-    injects[injects.len() - 1]
+    injects_ref[injects_ref.len() - 1]
         .iter()
         .fold(module, |module, inject| {
-            match inject.0.node {
-                TyKind::Path(_, ref path) => {
-                    module.items.iter().enumerate().find(|&(_, item)| {
-                        path == &Path::from_ident(path.span, item.ident)
-                    })
-                },
-                _ => {
-                    cx.span_err(
-                        inject.0.span,
-                        "The structure for which the signals are implemented \
-                         is not found in the current module. Please define \
-                         the structure in the same location as the \
-                         implementation. Perhaps in the future, this \
-                         restriction will be removed.",
-                    );
+            if let TyKind::Path(_, ref path) = inject.0.node {
+                module.items.iter().enumerate().find(|&(_, item)| {
+                    path == &Path::from_ident(path.span, item.ident)
+                })
+            } else {
+                cx.span_err(
+                    inject.0.span,
+                    "The structure for which the signals are implemented is \
+                     not found in the current module. Please define the \
+                     structure in the same location as the implementation. \
+                     Perhaps in the future, this restriction will be removed.",
+                );
 
-                    None
-                },
+                None
             }.map(|(number, item)| {
                 (
                     number,
@@ -115,28 +111,30 @@ fn sig_mod(
                     },
                 )
             })
-                .map(|(number, item_node)| {
-                    let module = module.clone();
-                    let mut items = module.items;
-                    let item = items[number].clone();
-                    let item = P(Item {
-                        ident: item.ident,
-                        attrs: item.attrs.clone(),
-                        id: item.id,
-                        node: item_node,
-                        vis: item.vis.clone(),
-                        span: item.span,
-                        tokens: item.tokens.clone(),
-                    });
+                .map_or_else(
+                    || module.clone(),
+                    |(number, item_node)| {
+                        let module = module.clone();
+                        let mut items = module.items;
+                        let item = items[number].clone();
+                        let item = P(Item {
+                            ident: item.ident,
+                            attrs: item.attrs.clone(),
+                            id: item.id,
+                            node: item_node,
+                            vis: item.vis.clone(),
+                            span: item.span,
+                            tokens: item.tokens.clone(),
+                        });
 
-                    items[number] = item;
+                        items[number] = item;
 
-                    Mod {
-                        inner: module.inner,
-                        items,
-                    }
-                })
-                .unwrap_or(module.clone())
+                        Mod {
+                            inner: module.inner,
+                            items,
+                        }
+                    },
+                )
         })
 }
 
@@ -145,7 +143,7 @@ fn sig_method(
     injects: &mut [Vec<(P<Ty>, Vec<StructField>)>],
     ty: &P<Ty>,
     ident: Ident,
-    attrs: &Vec<Attribute>,
+    attrs: &[Attribute],
     sig: &MethodSig,
     body: &P<Block>,
 ) -> (MethodSig, P<Block>)
@@ -156,15 +154,15 @@ fn sig_method(
             attr.path
                 == Path::from_ident(attr.path.span, Ident::from_str("sig"))
         })
-        .and_then(|_| sig.decl.inputs.iter().nth(0))
+        .and_then(|_| sig.decl.inputs.get(0))
         .and_then(|arg| {
             if let PatKind::Ident(
                 _,
                 SpannedIdent {
-                    node: Ident { name, ctxt: _ },
-                    span: _,
+                    node: Ident { name, .. },
+                    ..
                 },
-                _,
+                ..
             ) = arg.pat.node
             {
                 if name == Symbol::intern("self") {
@@ -195,8 +193,10 @@ fn sig_method(
                 None
             },
         })
-        .map(|_| {
-            injects[injects.len() - 1].push((
+        .map_or_else(
+            || (sig.clone(), body.clone()),
+            |_| {
+                injects[injects.len() - 1].push((
                 ty.clone(),
                 vec![
                     StructField {
@@ -268,64 +268,68 @@ fn sig_method(
                 ],
             ));
 
-            let mut stmts = body.stmts.clone();
+                let mut stmts = body.stmts.clone();
 
-            stmts.push(
-                cx.stmt_expr(
-                    cx.expr(
-                        DUMMY_SP,
-                        ExprKind::ForLoop(
-                            cx.pat_ident(DUMMY_SP, Ident::from_str("slot")),
-                            cx.expr_method_call(
-                                DUMMY_SP,
-                                cx.expr_field_access(
+                stmts.push(
+                    cx.stmt_expr(
+                        cx.expr(
+                            DUMMY_SP,
+                            ExprKind::ForLoop(
+                                cx.pat_ident(DUMMY_SP, Ident::from_str("slot")),
+                                cx.expr_method_call(
                                     DUMMY_SP,
-                                    cx.expr_self(DUMMY_SP),
-                                    ident,
-                                ),
-                                Ident::from_str("iter"),
-                                vec![],
-                            ),
-                            cx.block_expr(
-                                cx.expr_call(
-                                    DUMMY_SP,
-                                    cx.expr_ident(
+                                    cx.expr_field_access(
                                         DUMMY_SP,
-                                        Ident::from_str("slot"),
+                                        cx.expr_self(DUMMY_SP),
+                                        ident,
                                     ),
-                                    sig.decl.inputs[1..]
-                                        .iter()
-                                        .map(|arg| match arg.pat.node {
-                                            PatKind::Ident(_, ident, _) => {
-                                                cx.expr_ident(
-                                                    DUMMY_SP,
-                                                    ident.node,
-                                                )
-                                            },
-                                            _ => {
-                                                cx.span_err(
-                                                    arg.pat.span,
-                                                    "Unexpected pattern.",
-                                                );
-
-                                                cx.expr_ident(
-                                                    DUMMY_SP,
-                                                    Ident::from_str(""),
-                                                )
-                                            },
-                                        })
-                                        .collect(),
+                                    Ident::from_str("iter"),
+                                    vec![],
                                 ),
+                                cx.block_expr(
+                                    cx.expr_call(
+                                        DUMMY_SP,
+                                        cx.expr_ident(
+                                            DUMMY_SP,
+                                            Ident::from_str("slot"),
+                                        ),
+                                        sig.decl.inputs[1..]
+                                            .iter()
+                                            .map(|arg| {
+                                                if let PatKind::Ident(
+                                                    _,
+                                                    ident,
+                                                    _,
+                                                ) = arg.pat.node
+                                                {
+                                                    cx.expr_ident(
+                                                        DUMMY_SP,
+                                                        ident.node,
+                                                    )
+                                                } else {
+                                                    cx.span_err(
+                                                        arg.pat.span,
+                                                        "Unexpected pattern.",
+                                                    );
+
+                                                    cx.expr_ident(
+                                                        DUMMY_SP,
+                                                        Ident::from_str(""),
+                                                    )
+                                                }
+                                            })
+                                            .collect(),
+                                    ),
+                                ),
+                                None,
                             ),
-                            None,
                         ),
                     ),
-                ),
-            );
+                );
 
-            (sig.clone(), cx.block(body.span, stmts))
-        })
-        .unwrap_or((sig.clone(), body.clone()))
+                (sig.clone(), cx.block(body.span, stmts))
+            },
+        )
 }
 
 fn sig_impl_item(
@@ -335,44 +339,35 @@ fn sig_impl_item(
     item: &ImplItem,
 ) -> ImplItem
 {
-    match item.node {
-        ImplItemKind::Method(ref method, ref body) => {
-            let (method, body) = sig_method(
-                cx,
-                injects,
-                ty,
-                item.ident,
-                &item.attrs,
-                method,
-                body,
+    if let ImplItemKind::Method(ref method, ref body) = item.node {
+        let (method, body) =
+            sig_method(cx, injects, ty, item.ident, &item.attrs, method, body);
+
+        ImplItem {
+            id: item.id,
+            ident: item.ident,
+            vis: item.vis.clone(),
+            defaultness: item.defaultness,
+            attrs: item.attrs.clone(),
+            generics: item.generics.clone(),
+            node: ImplItemKind::Method(method, body),
+            span: item.span,
+            tokens: item.tokens.clone(),
+        }
+    } else {
+        let sig_find = item.attrs.iter().any(|attr| {
+            attr.path
+                == Path::from_ident(attr.path.span, Ident::from_str("sig"))
+        });
+
+        if sig_find {
+            cx.span_err(
+                item.span,
+                "Using sig attribute is only allowed for methods and crates",
             );
+        }
 
-            ImplItem {
-                id: item.id,
-                ident: item.ident,
-                vis: item.vis.clone(),
-                defaultness: item.defaultness,
-                attrs: item.attrs.clone(),
-                generics: item.generics.clone(),
-                node: ImplItemKind::Method(method, body),
-                span: item.span,
-                tokens: item.tokens.clone(),
-            }
-        },
-        _ => {
-            if item.attrs.iter().any(|attr| {
-                attr.path
-                    == Path::from_ident(attr.path.span, Ident::from_str("sig"))
-            }) {
-                cx.span_err(
-                    item.span,
-                    "Using sig attribute is only allowed for methods and \
-                     crates",
-                );
-            }
-
-            item.clone()
-        },
+        item.clone()
     }
 }
 
@@ -380,7 +375,7 @@ fn sig_impl_items(
     cx: &mut ExtCtxt,
     injects: &mut [Vec<(P<Ty>, Vec<StructField>)>],
     ty: &P<Ty>,
-    items: &Vec<ImplItem>,
+    items: &[ImplItem],
 ) -> Vec<ImplItem>
 {
     items
@@ -396,9 +391,18 @@ fn sig_item(
     item: &P<Item>,
 ) -> P<Item>
 {
-    if !item.attrs.iter().any(|attr| {
+    let sig_find = item.attrs.iter().any(|attr| {
         attr.path == Path::from_ident(attr.path.span, Ident::from_str("sig"))
-    }) {
+    });
+
+    if sig_find {
+        cx.span_err(
+            item.span,
+            "Using sig attribute is only allowed for methods and crates.",
+        );
+
+        item.clone()
+    } else {
         match item.node {
             ItemKind::Mod(ref module) => P(Item {
                 ident: item.ident,
@@ -418,7 +422,15 @@ fn sig_item(
                 ref ty,
                 ref items,
             ) => {
-                if visited.len() > 0 {
+                if visited.is_empty() {
+                    cx.span_err(
+                        item.span,
+                        "Using sig attribute is only allowed for methods and \
+                         crates.",
+                    );
+
+                    item.clone()
+                } else {
                     P(Item {
                         ident: item.ident,
                         attrs: item.attrs.clone(),
@@ -436,18 +448,10 @@ fn sig_item(
                         span: item.span,
                         tokens: item.tokens.clone(),
                     })
-                } else {
-                    cx.span_err(
-                        item.span,
-                        "Using sig attribute is only allowed for methods and \
-                         crates.",
-                    );
-
-                    item.clone()
                 }
             },
             _ => {
-                if visited.len() == 0 {
+                if visited.is_empty() {
                     cx.span_err(
                         item.span,
                         "Using sig attribute is only allowed for methods and \
@@ -460,13 +464,6 @@ fn sig_item(
                 }
             },
         }
-    } else {
-        cx.span_err(
-            item.span,
-            "Using sig attribute is only allowed for methods and crates.",
-        );
-
-        item.clone()
     }
 }
 
