@@ -15,14 +15,13 @@ extern crate syntax_pos;
 use rustc_plugin::Registry;
 use syntax::ast::{AngleBracketedParameterData, Attribute, Block, ExprKind,
                   FunctionRetTy, ImplItem, ImplItemKind, Item, ItemKind,
-                  MetaItem, MethodSig, Mod, MutTy, ParenthesizedParameterData,
+                  MetaItem, MethodSig, Mod, ParenthesizedParameterData,
                   PatKind, Path, PathParameters, PathSegment, SpannedIdent,
                   StructField, Ty, TyKind, VariantData, Visibility,
                   VisibilityKind, DUMMY_NODE_ID};
 use syntax::ext::base::{Annotatable, ExtCtxt, SyntaxExtension};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::quote::rt::Span;
-use syntax::feature_gate::AttributeType;
 use syntax::ptr::P;
 use syntax::symbol::Symbol;
 use syntax_pos::DUMMY_SP;
