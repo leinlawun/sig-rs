@@ -22,6 +22,7 @@ use syntax::ast::{AngleBracketedParameterData, Attribute, Block, ExprKind,
 use syntax::ext::base::{Annotatable, ExtCtxt, SyntaxExtension};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::quote::rt::Span;
+use syntax::feature_gate::AttributeType;
 use syntax::ptr::P;
 use syntax::symbol::Symbol;
 use syntax_pos::DUMMY_SP;
@@ -56,7 +57,14 @@ fn sig_mod(
                     })
                 },
                 _ => {
-                    cx.span_err(inject.0.span, "");
+                    cx.span_err(
+                        inject.0.span,
+                        "The structure for which the signals are implemented \
+                         is not found in the current module. Please define \
+                         the structure in the same location as the \
+                         implementation. Perhaps in the future, this \
+                         restriction will be removed.",
+                    );
 
                     None
                 },
@@ -84,7 +92,11 @@ fn sig_mod(
                                         node_id,
                                     ),
                                     content => {
-                                        cx.span_err(item.span, "");
+                                        cx.span_err(
+                                            item.span,
+                                            "Only structures and tuple \
+                                             structures are supported.",
+                                        );
 
                                         content.clone()
                                     },
@@ -93,7 +105,11 @@ fn sig_mod(
                             )
                         },
                         ref node => {
-                            cx.span_err(item.span, "");
+                            cx.span_err(
+                                item.span,
+                                "Only structures and tuple structures are \
+                                 supported.",
+                            );
 
                             node.clone()
                         },
@@ -142,23 +158,6 @@ fn sig_method(
                 == Path::from_ident(attr.path.span, Ident::from_str("sig"))
         })
         .and_then(|_| sig.decl.inputs.iter().nth(0))
-        .and_then(|arg| match arg.ty.node {
-            TyKind::Rptr(_, MutTy { ref ty, mutbl: _ }) => {
-                if let TyKind::ImplicitSelf = ty.node {
-                    Some(arg)
-                } else {
-                    cx.span_err(ty.span, "");
-
-                    None
-                }
-            },
-            TyKind::ImplicitSelf => Some(arg),
-            _ => {
-                cx.span_err(arg.ty.span, "");
-
-                None
-            },
-        })
         .and_then(|arg| {
             if let PatKind::Ident(
                 _,
@@ -170,14 +169,17 @@ fn sig_method(
             ) = arg.pat.node
             {
                 if name == Symbol::intern("self") {
-                    Some(())
+                    Some(arg)
                 } else {
-                    cx.span_err(arg.pat.span, "");
+                    cx.span_err(
+                        arg.pat.span,
+                        "Static methods are not supported.",
+                    );
 
                     None
                 }
             } else {
-                cx.span_err(arg.pat.span, "");
+                cx.span_err(arg.pat.span, "Unexpected pattern.");
 
                 None
             }
@@ -185,7 +187,11 @@ fn sig_method(
         .and_then(|_| match sig.decl.output {
             FunctionRetTy::Default(_) => Some(()),
             FunctionRetTy::Ty(ref ty) => {
-                cx.span_err(ty.span, "");
+                cx.span_err(
+                    ty.span,
+                    "A signal can only return an empty value. Perhaps in the \
+                     future, this restriction will be removed.",
+                );
 
                 None
             },
@@ -298,7 +304,10 @@ fn sig_method(
                                                 )
                                             },
                                             _ => {
-                                                cx.span_err(arg.pat.span, "");
+                                                cx.span_err(
+                                                    arg.pat.span,
+                                                    "Unexpected pattern.",
+                                                );
 
                                                 cx.expr_ident(
                                                     DUMMY_SP,
@@ -356,7 +365,11 @@ fn sig_impl_item(
                 attr.path
                     == Path::from_ident(attr.path.span, Ident::from_str("sig"))
             }) {
-                cx.span_err(item.span, "");
+                cx.span_err(
+                    item.span,
+                    "Using sig attribute is only allowed for methods and \
+                     crates",
+                );
             }
 
             item.clone()
@@ -425,14 +438,22 @@ fn sig_item(
                         tokens: item.tokens.clone(),
                     })
                 } else {
-                    cx.span_err(item.span, "");
+                    cx.span_err(
+                        item.span,
+                        "Using sig attribute is only allowed for methods and \
+                         crates.",
+                    );
 
                     item.clone()
                 }
             },
             _ => {
                 if visited.len() == 0 {
-                    cx.span_err(item.span, "");
+                    cx.span_err(
+                        item.span,
+                        "Using sig attribute is only allowed for methods and \
+                         crates.",
+                    );
 
                     item.clone()
                 } else {
@@ -441,7 +462,10 @@ fn sig_item(
             },
         }
     } else {
-        cx.span_err(item.span, "");
+        cx.span_err(
+            item.span,
+            "Using sig attribute is only allowed for methods and crates.",
+        );
 
         item.clone()
     }
