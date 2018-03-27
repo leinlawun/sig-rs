@@ -35,7 +35,7 @@ fn sig_mod(
     item: &Mod,
 ) -> Mod
 {
-    let new_visited = [visited, &[&item]].concat();
+    let new_visited = [visited, &[item]].concat();
     let visited_ref = new_visited.as_slice();
     let mut new_injects = [injects, &mut [vec![]]].concat();
     let injects_ref = new_injects.as_mut();
@@ -171,7 +171,7 @@ fn sig_method(
                     node: Ident { name, .. },
                     ..
                 },
-                ..,
+                ..
             ) = arg.pat.node
             {
                 if name == Symbol::intern("self") {
