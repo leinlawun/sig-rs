@@ -13,12 +13,13 @@ extern crate syntax;
 extern crate syntax_pos;
 
 use rustc_plugin::Registry;
-use syntax::ast::{AngleBracketedParameterData, Attribute, Block, ExprKind,
-                  FunctionRetTy, ImplItem, ImplItemKind, Item, ItemKind,
-                  MetaItem, MethodSig, Mod, ParenthesizedParameterData,
-                  PatKind, Path, PathParameters, PathSegment, SpannedIdent,
-                  StructField, Ty, TyKind, VariantData, Visibility,
-                  VisibilityKind, DUMMY_NODE_ID};
+use syntax::ast::{
+    AngleBracketedParameterData, Attribute, Block, ExprKind, FunctionRetTy,
+    ImplItem, ImplItemKind, Item, ItemKind, MetaItem, MethodSig, Mod,
+    ParenthesizedParameterData, PatKind, Path, PathParameters, PathSegment,
+    SpannedIdent, StructField, Ty, TyKind, VariantData, Visibility,
+    VisibilityKind, DUMMY_NODE_ID,
+};
 use syntax::ext::base::{Annotatable, ExtCtxt, SyntaxExtension};
 use syntax::ext::build::AstBuilder;
 use syntax::ext::quote::rt::Span;
@@ -50,9 +51,13 @@ fn sig_mod(
         .iter()
         .fold(module, |module, inject| {
             if let TyKind::Path(_, ref path) = inject.0.node {
-                module.items.iter().enumerate().find(|&(_, item)| {
-                    path == &Path::from_ident(path.span, item.ident)
-                })
+                module
+                    .items
+                    .iter()
+                    .enumerate()
+                    .find(|&(_, item)| {
+                        path == &Path::from_ident(path.span, item.ident)
+                    })
             } else {
                 cx.span_err(
                     inject.0.span,
@@ -73,19 +78,23 @@ fn sig_mod(
                                     &VariantData::Struct(
                                         ref fields,
                                         node_id,
-                                    ) => VariantData::Struct(
-                                        [fields.clone(), inject.1.clone()]
-                                            .concat(),
-                                        node_id,
-                                    ),
+                                    ) => {
+                                        VariantData::Struct(
+                                            [fields.clone(), inject.1.clone()]
+                                                .concat(),
+                                            node_id,
+                                        )
+                                    },
                                     &VariantData::Tuple(
                                         ref fields,
                                         node_id,
-                                    ) => VariantData::Tuple(
-                                        [fields.clone(), inject.1.clone()]
-                                            .concat(),
-                                        node_id,
-                                    ),
+                                    ) => {
+                                        VariantData::Tuple(
+                                            [fields.clone(), inject.1.clone()]
+                                                .concat(),
+                                            node_id,
+                                        )
+                                    },
                                     content => {
                                         cx.span_err(
                                             item.span,
@@ -151,8 +160,8 @@ fn sig_method(
     attrs
         .iter()
         .find(|attr| {
-            attr.path
-                == Path::from_ident(attr.path.span, Ident::from_str("sig"))
+            attr.path ==
+                Path::from_ident(attr.path.span, Ident::from_str("sig"))
         })
         .and_then(|_| sig.decl.inputs.get(0))
         .and_then(|arg| {
@@ -162,7 +171,7 @@ fn sig_method(
                     node: Ident { name, .. },
                     ..
                 },
-                ..
+                ..,
             ) = arg.pat.node
             {
                 if name == Symbol::intern("self") {
@@ -181,17 +190,19 @@ fn sig_method(
                 None
             }
         })
-        .and_then(|_| match sig.decl.output {
-            FunctionRetTy::Default(_) => Some(()),
-            FunctionRetTy::Ty(ref ty) => {
-                cx.span_err(
-                    ty.span,
-                    "A signal can only return an empty value. Perhaps in the \
-                     future, this restriction will be removed.",
-                );
+        .and_then(|_| {
+            match sig.decl.output {
+                FunctionRetTy::Default(_) => Some(()),
+                FunctionRetTy::Ty(ref ty) => {
+                    cx.span_err(
+                        ty.span,
+                        "A signal can only return an empty value. Perhaps in \
+                         the future, this restriction will be removed.",
+                    );
 
-                None
-            },
+                    None
+                },
+            }
         })
         .map_or_else(
             || (sig.clone(), body.clone()),
@@ -340,8 +351,15 @@ fn sig_impl_item(
 ) -> ImplItem
 {
     if let ImplItemKind::Method(ref method, ref body) = item.node {
-        let (method, body) =
-            sig_method(cx, injects, ty, item.ident, &item.attrs, method, body);
+        let (method, body) = sig_method(
+            cx,
+            injects,
+            ty,
+            item.ident,
+            &item.attrs,
+            method,
+            body,
+        );
 
         ImplItem {
             id: item.id,
@@ -356,8 +374,8 @@ fn sig_impl_item(
         }
     } else {
         let sig_find = item.attrs.iter().any(|attr| {
-            attr.path
-                == Path::from_ident(attr.path.span, Ident::from_str("sig"))
+            attr.path ==
+                Path::from_ident(attr.path.span, Ident::from_str("sig"))
         });
 
         if sig_find {
@@ -404,15 +422,17 @@ fn sig_item(
         item.clone()
     } else {
         match item.node {
-            ItemKind::Mod(ref module) => P(Item {
-                ident: item.ident,
-                attrs: item.attrs.clone(),
-                id: item.id,
-                node: ItemKind::Mod(sig_mod(cx, visited, injects, module)),
-                vis: item.vis.clone(),
-                span: item.span,
-                tokens: item.tokens.clone(),
-            }),
+            ItemKind::Mod(ref module) => {
+                P(Item {
+                    ident: item.ident,
+                    attrs: item.attrs.clone(),
+                    id: item.id,
+                    node: ItemKind::Mod(sig_mod(cx, visited, injects, module)),
+                    vis: item.vis.clone(),
+                    span: item.span,
+                    tokens: item.tokens.clone(),
+                })
+            },
             ItemKind::Impl(
                 unsafety,
                 impl_polarity,

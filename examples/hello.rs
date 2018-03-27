@@ -14,9 +14,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 macro_rules! connect {
-    ($object:expr, $signal:ident, $slot:expr) => {
+    ($object: expr, $signal: ident, $slot: expr) => {
         $object.$signal.push(Rc::new($slot))
-    }
+    };
 }
 
 struct Hello {
@@ -78,7 +78,9 @@ fn main() {
 
     connect!(hello1, hello, world);
     connect!(hello1, hello, move || hello2.hello_galaxy());
-    connect!(hello1, hello, move || hello3.borrow_mut().answer());
+    connect!(hello1, hello, move || {
+        hello3.borrow_mut().answer()
+    });
     connect!(hello1, hello, universe);
     connect!(hello1, hello_person, person);
 
